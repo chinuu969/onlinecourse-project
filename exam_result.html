@@ -1,0 +1,8 @@
+<h2>Exam Result</h2>
+
+<p>Course: {{ course.name }}</p>
+<p>Your Score: {{ score }} / {{ total }}</p>
+
+{% if score == total %}
+    <h4>🎉 Perfect Score!</h4>
+{% endif %}
