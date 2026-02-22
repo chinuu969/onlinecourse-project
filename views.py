@@ -1,45 +1,46 @@
-from django.http import HttpResponse
-
-def index(request):
-    return HttpResponse("Online Course App is working")
 from django.shortcuts import render, get_object_or_404
-from .models import Course, Submission, Choice
 from django.http import HttpResponseRedirect
 from django.urls import reverse
+from .models import Course, Enrollment, Submission, Choice
+
 
 def submit_exam(request, course_id):
     course = get_object_or_404(Course, pk=course_id)
+    enrollment = get_object_or_404(Enrollment, user=request.user, course=course)
+
+    # create submission
+    submission = Submission.objects.create(enrollment=enrollment)
+
+    # get selected choices
     selected_choices = request.POST.getlist('choice')
 
-    enrollment = request.user.enrollment_set.get(course=course)
-
-    submission = Submission.objects.create(enrollment=enrollment)
-    
     for choice_id in selected_choices:
-        choice = Choice.objects.get(pk=choice_id)
+        choice = Choice.objects.get(pk=int(choice_id))
         submission.choices.add(choice)
 
-    return HttpResponseRedirect(reverse('exam_result', args=(course.id, submission.id)))
+    submission.save()
+
+    return HttpResponseRedirect(
+        reverse('onlinecourse:show_exam_result', args=(course.id, submission.id))
+    )
+
+
 def show_exam_result(request, course_id, submission_id):
+    course = get_object_or_404(Course, pk=course_id)
     submission = get_object_or_404(Submission, pk=submission_id)
-    total = 0
-    score = 0
 
-    for question in submission.enrollment.course.question_set.all():
-        total += question.grade
-        correct_choices = question.choice_set.filter(is_correct=True)
-        selected_choices = submission.choices.filter(question=question)
+    total_score = submission.get_score()
 
-        if set(correct_choices) == set(selected_choices):
-            score += question.grade
+    # calculate max possible score
+    possible_score = 0
+    for question in course.question_set.all():
+        possible_score += question.grade
 
     context = {
-        'course': submission.enrollment.course,
-        'score': score,
-        'total': total
+        'course': course,
+        'submission': submission,
+        'total_score': total_score,
+        'possible_score': possible_score,
     }
 
-    return render(request, 'onlinecourse/exam_result.html', context)
-
-
-# Create your views here.
+    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
